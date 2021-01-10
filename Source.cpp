@@ -44,6 +44,9 @@ int ctrlPointsToggleCheckboxBool;
 GLUI_Checkbox* ticksCheckbox;
 int ticksCheckboxBool;
 
+GLUI_Spinner* s_spinner;
+
+
 class Point {
 public:
 	GLfloat xcord = 0;
@@ -68,14 +71,19 @@ float m[16];
 BOOLEAN addPoint = false;
 BOOLEAN lmbd = false;
 
+BOOLEAN clipLeft = false;
+BOOLEAN clipRight = false;
+
 
 float timevar= 0.26f;
 float tVar = 0.26;
+float sval = 0.5;
 
 int wireframe;
 int segments;
 
 vector<Point> vec;
+vector<Point> tempSlerp;
 
 
 void drawCubeLocation(GLfloat xcenter, GLfloat ycenter, GLfloat size, GLfloat zpos, float rcolor, float gcolor, float bcolor) {
@@ -235,8 +243,6 @@ void slerp(vector<Point> vec) {
 
 
 
-
-
 						if (ftCheckboxBool && (abs(t-tVar)<0.01)) {
 							//draw in other color!
 							specialColor = true;
@@ -246,7 +252,32 @@ void slerp(vector<Point> vec) {
 						//cubey = ycordDraw;
 						//cubez = zcordDraw;
 
-						drawCube = true;
+
+						if (!clipLeft && !clipRight) {
+							//no clip enabled
+							drawCube = true;
+							
+						}
+						else if (clipLeft && clipRight) {
+							//should never be reached
+							printf("both clips activated Err\n");
+							drawCube = true;
+							
+						}
+
+						else if (clipLeft && i > sval) {
+							drawCube = true;
+							
+						}
+
+						else if (clipRight && i <= sval) {
+							drawCube = true;
+							
+						}
+						if (drawCube) {
+							
+						}
+						
 					}
 				}
 			}
@@ -257,6 +288,7 @@ void slerp(vector<Point> vec) {
 		if (DeCastelijauCheckboxBool && (abs(t - tVar) < 0.01)) {
 			glEnd();
 		}
+		
 
 		//store xyz for cube draw
 		if (drawCube) {
@@ -577,6 +609,19 @@ void resetPoints(int val) {
 	glutPostRedisplay();
 }
 
+void clip(int val) {
+	if (val == 1) {
+		//lcip left
+		clipLeft = true;
+		clipRight = false;
+	}
+	else if (val == 2) {
+		//clip right
+		clipLeft = false;
+		clipRight = true;
+	}
+	glutPostRedisplay();
+}
 
 /*
 The main function.
@@ -624,7 +669,14 @@ int main(int argc, char** argv)
 	segment_spinner = glui->add_spinner("T Val",GLUI_SPINNER_FLOAT, &tVar);
 	segment_spinner->set_float_limits(0.0, 1.0);
 
+	s_spinner = glui->add_spinner("S val", GLUI_SPINNER_FLOAT, &sval);
+	s_spinner->set_float_limits(0.0, 1.0);
+
 	GLUI_Button* reset = glui->add_button("Clear Control Points", 1, resetPoints);
+
+	glui->add_separator();
+	glui->add_button("Clip Left", 1, clip);
+	glui->add_button("Clip Right", 2, clip);
 
 
 	GLUI_Button* quit = glui->add_button("Exit", 0, (GLUI_Update_CB)exit);
