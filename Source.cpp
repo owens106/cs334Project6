@@ -45,6 +45,7 @@ GLUI_Checkbox* ticksCheckbox;
 int ticksCheckboxBool;
 
 GLUI_Spinner* s_spinner;
+GLUI_Spinner* t_extend;
 
 
 class Point {
@@ -74,10 +75,14 @@ BOOLEAN lmbd = false;
 BOOLEAN clipLeft = false;
 BOOLEAN clipRight = false;
 
+BOOLEAN extendLeft = false;
+BOOLEAN extendRight= false;
+
 
 float timevar= 0.26f;
 float tVar = 0.26;
 float sval = 0.5;
+float tExtend = 0.0;
 
 int wireframe;
 int segments;
@@ -158,6 +163,7 @@ void select(int index) {
 
 void slerp(vector<Point> vec) {
 	if (vec.size() == 1) {
+		tempSlerp.clear();
 		return;
 	}
 
@@ -169,9 +175,9 @@ void slerp(vector<Point> vec) {
 	BOOLEAN specialColor = false;
 
 	vector<Point> tempVec;
-	for (int i = 0; i < vec.size() - 1; i++) { //use all points in this stage to create the points in the next stage
-		Point p0 = vec.at(i);
-		Point p1 = vec.at(i + 1);
+	for (int q = 0; q < vec.size() - 1; q++) { //use all points in this stage to create the points in the next stage
+		Point p0 = vec.at(q);
+		Point p1 = vec.at(q + 1);
 
 		float len0 = sqrt((pow(p0.xcord, 2)) + (pow(p0.ycord, 2)) + (pow(p0.zcord, 2))); //magnitude of V1
 		float len1 = sqrt((pow(p1.xcord, 2)) + (pow(p1.ycord, 2)) + (pow(p1.zcord, 2))); //magnitude of V2
@@ -197,7 +203,7 @@ void slerp(vector<Point> vec) {
 
 		nextPoint.xcord = alpha * p0.xcord + beta * p1.xcord; //calculate coords of next point using current P0 and P1
 		nextPoint.ycord = alpha * p0.ycord + beta * p1.ycord;
-		nextPoint.zcord = alpha * p0.zcord + beta * p0.zcord;
+		nextPoint.zcord = alpha * p0.zcord + beta * p1.zcord;
 
 
 		tempVec.push_back(nextPoint); //store next point for next stage of computation
@@ -207,11 +213,26 @@ void slerp(vector<Point> vec) {
 		if (DeCastelijauCheckboxBool && (abs(t-tVar)<0.01)) { //only draw if check box is marked AND current iteration matches the current spinner t value
 			glBegin(GL_LINE_STRIP);
 		}
+		float counter = 0.0;
+		float stop = 1.0;
+		if (extendLeft) {
+			counter = tExtend;
+			stop = 1.0;
+		}
+		else if (extendRight) {
+			counter = 0.0;
+			stop = tExtend;
+		}
+		else {
+			counter = 0.0;
+			stop = 1.0;
+		}
 
-		for (float i = 0; i <= 1; i += 0.05f) {
+
+		for (counter; counter <= stop; counter += 0.05f) {
 			//this represents T steps
-			float alpha = sin((1 - i) * angle) / sin(angle); //calculate alpha for current t
-			float beta = sin(i * angle) / sin(angle); //calculate beta for current t
+			float alpha = sin((1 - counter) * angle) / sin(angle); //calculate alpha for current t
+			float beta = sin(counter * angle) / sin(angle); //calculate beta for current t
 			float xcord = alpha * p0.xcord + beta * p1.xcord;
 			float ycord = alpha * p0.ycord + beta * p1.ycord;
 			float zcord = alpha * p0.zcord + beta * p1.zcord;
@@ -229,7 +250,7 @@ void slerp(vector<Point> vec) {
 			if (CurveCheckboxBool) {
 				//draw curve
 				if (vec.size() == 2 && ::vec.size() > 2) {
-					if (abs(i - timevar) <= 0.05) {
+					if (abs(counter - timevar) <= 0.05) {
 						//point to "save"
 
 						float tempxcord = xcord;
@@ -241,6 +262,8 @@ void slerp(vector<Point> vec) {
 						cubey = ycord;
 						cubez = zcord;
 
+
+						Point tempPoint;
 
 
 						if (ftCheckboxBool && (abs(t-tVar)<0.01)) {
@@ -265,18 +288,21 @@ void slerp(vector<Point> vec) {
 							
 						}
 
-						else if (clipLeft && i > sval) {
+						else if (clipLeft && counter > sval) {
 							drawCube = true;
 							
 						}
 
-						else if (clipRight && i <= sval) {
+						else if (clipRight && counter <= sval) {
 							drawCube = true;
 							
 						}
 						if (drawCube) {
-							
+							tempPoint.xcord = cubex;
+							tempPoint.ycord = cubey;
+							tempPoint.zcord = cubez;
 						}
+						tempSlerp.push_back(tempPoint);
 						
 					}
 				}
@@ -288,7 +314,11 @@ void slerp(vector<Point> vec) {
 		if (DeCastelijauCheckboxBool && (abs(t - tVar) < 0.01)) {
 			glEnd();
 		}
-		
+		glBegin(GL_LINE_STRIP);
+		for (int p = 0; p < tempSlerp.size(); p++) {
+			glVertex3f(tempSlerp.at(p).xcord, tempSlerp.at(p).ycord, tempSlerp.at(p).zcord);
+		}
+		glEnd();
 
 		//store xyz for cube draw
 		if (drawCube) {
@@ -430,11 +460,42 @@ void display() {
 	}
 	
 	if (vec.size() > 1){
-		for (float i = 0.0; i <= 1.0; i += 0.01) { // t = [0,1]
-			timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
-			slerp(vec);
+		if (extendRight) {
+			if (tExtend < 1.0) {
+				//no longer valid to extend right
+				extendRight = false;
+			}
 		}
-	}
+
+		if (extendLeft) {
+			if (tExtend > 0.0) {
+				extendLeft = false;
+			}
+		}
+		if (extendLeft) {
+			printf("extend Left\n");
+			for (float i = tExtend; i <= 1.0; i += 0.01) { // t =[textend,1]
+				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
+				slerp(vec);
+			}
+		}
+		else if (extendRight) {
+			printf("extend Right\n");
+
+			for (float i = 0.0; i <= tExtend; i += 0.01) { // t =[0,textend]
+				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
+				slerp(vec);
+			}
+		}
+		else {
+			printf("extend None\n");
+
+			for (float i = 0.0; i <= 1.0; i += 0.01) { // t = [0,1] no extension
+				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
+				slerp(vec);
+			}
+		}
+	}//end vec size if
 	
 
 	glFlush();
@@ -620,6 +681,32 @@ void clip(int val) {
 		clipLeft = false;
 		clipRight = true;
 	}
+	else if (val == 3) {
+		//extend left
+		if (tExtend >= 0.0) {
+			extendLeft = false;
+			extendRight = false;
+			return;
+		}
+		extendLeft = true;
+		extendRight = false;
+	}
+	else if (val == 4) {
+		if (tExtend <= 1.0) {
+			extendLeft = false;
+			extendRight = false;
+			return;
+		}
+		extendLeft = false;
+		extendRight = true;
+	}
+	else if (val == 5) {
+		//reset
+		clipLeft = false;
+		clipRight = false;
+		extendLeft = false;
+		extendRight = false;
+	}
 	glutPostRedisplay();
 }
 
@@ -672,11 +759,20 @@ int main(int argc, char** argv)
 	s_spinner = glui->add_spinner("S val", GLUI_SPINNER_FLOAT, &sval);
 	s_spinner->set_float_limits(0.0, 1.0);
 
+	t_extend = glui->add_spinner("T Extension", GLUI_SPINNER_FLOAT, &tExtend);
+	t_extend->set_float_limits(-3.0, 3.0);
+
 	GLUI_Button* reset = glui->add_button("Clear Control Points", 1, resetPoints);
 
 	glui->add_separator();
 	glui->add_button("Clip Left", 1, clip);
 	glui->add_button("Clip Right", 2, clip);
+
+	glui->add_button("Extend Left", 3, clip);
+	glui->add_button("Extend Right", 4, clip);
+
+	glui->add_button("Reset clips & extensions", 5, clip);
+
 
 
 	GLUI_Button* quit = glui->add_button("Exit", 0, (GLUI_Update_CB)exit);
