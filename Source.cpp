@@ -56,6 +56,12 @@ public:
 	float rcolor = 1.0;
 	float bcolor = 0.0;
 	float gcolor = 0.0;
+
+	GLfloat tangentxcord = -1.0;
+	GLfloat tangentycord = 0;
+	GLfloat tangentzcord = 0;
+
+
 };
 
 int  main_window;; //variable that hold main window
@@ -70,6 +76,7 @@ float ypoint = 0;
 float m[16];
 
 BOOLEAN addPoint = false;
+BOOLEAN addtangent = true;
 BOOLEAN lmbd = false;
 
 BOOLEAN clipLeft = false;
@@ -93,9 +100,11 @@ vector<Point> tempSlerp;
 
 void drawCubeLocation(GLfloat xcenter, GLfloat ycenter, GLfloat size, GLfloat zpos, float rcolor, float gcolor, float bcolor) {
 
+	glColor3f(rcolor, gcolor, bcolor);
+
+
 	glBegin(GL_POLYGON); //front face
 
-	glColor3f(rcolor, bcolor, gcolor);
 
 	glVertex3f(xcenter - size, ycenter + size, zpos - size); //top left
 
@@ -131,7 +140,6 @@ void drawCubeLocation(GLfloat xcenter, GLfloat ycenter, GLfloat size, GLfloat zp
 	glEnd();
 
 	glBegin(GL_POLYGON);//top face
-	glColor3f(0.0, 0.0, 1.0);
 	glVertex3f(xcenter + size, ycenter + size, zpos - size); //top right
 	glVertex3f(xcenter + size, ycenter + size, zpos + size); //top right
 	glVertex3f(xcenter - size, ycenter + size, zpos + size); //top left
@@ -208,7 +216,7 @@ void slerp(vector<Point> vec) {
 
 		tempVec.push_back(nextPoint); //store next point for next stage of computation
 
-		glColor3f(0.0, 0.5, 0.0); //set to green
+		glColor3f(0.0, 0.5, 0.0); //set to green for lines
 
 		if (DeCastelijauCheckboxBool && (abs(t-tVar)<0.01)) { //only draw if check box is marked AND current iteration matches the current spinner t value
 			glBegin(GL_LINE_STRIP);
@@ -323,11 +331,13 @@ void slerp(vector<Point> vec) {
 		//store xyz for cube draw
 		if (drawCube) {
 			if (specialColor) {
-				drawCubeLocation(cubex, cubey, 0.02, cubez, 1.0, 1.0, 1.0);
+				printf("inside special color\n");
+				drawCubeLocation(cubex, cubey, 0.02, cubez, 255.0, 105.0, 180.0);
 				specialColor = false;
 			}
 			else {
-				drawCubeLocation(cubex, cubey, 0.01, cubez, 1.0, 1.0, 0.0);
+				//curve points
+				drawCubeLocation(cubex, cubey, 0.01, cubez, 0.0,0.0,1.0);
 			}
 			drawCube = false;
 		}
@@ -401,7 +411,7 @@ void display() {
 
 	glScalef(1.0, 1.0, 1.0);
 	// built-in (glut library) function , draw you a sphere.
-	glColor3f(1.0, 1.0, 0.0);
+	glColor3f(1.0, 1.0, 0.0); ///yellow sphere
 
 
 	if (controlPolyCheckboxBool) {
@@ -437,14 +447,23 @@ void display() {
 		float yval = xpoint * m[4] + ypoint * m[5] + zval * m[6];
 
 		float zvalFinal = xpoint * m[8] + ypoint * m[9] + zval * m[10];
-		Point point;
-		point.xcord = xval;
-		point.ycord = yval;
-		point.zcord = zvalFinal;
-		vec.push_back(point);
+		if (addtangent) {
+			vec.back().tangentxcord = xval;
+			vec.back().tangentycord = yval;
+			vec.back().tangentzcord = zvalFinal;
+		}
+
+		else {
+			Point point;
+			point.xcord = xval;
+			point.ycord = yval;
+			point.zcord = zvalFinal;
+			vec.push_back(point);
+		}
 		addPoint = false;
 
 	}//end add point if
+
 
 	for (int i = 0; i < vec.size(); i++) {
 		glBegin(GL_POLYGON);
@@ -459,6 +478,72 @@ void display() {
 
 	}
 	
+	for (int j = 0; j < vec.size(); j++) {
+		//draw tangent lines
+		if (vec.at(j).tangentxcord == -1.0) {
+			break;
+		}
+
+		float tanx = vec.at(j).tangentxcord;
+		float tany = vec.at(j).tangentycord;
+		float tanz = vec.at(j).tangentzcord;
+		Point p0 = vec.at(j);
+
+
+
+		drawCubeLocation(vec.at(j).tangentxcord, vec.at(j).tangentycord, 0.02, vec.at(j).tangentzcord, 1.0,0.41,0.705);
+		
+		glBegin(GL_LINE_STRIP);
+		glColor3f(1.0, 0.41, 0.705);
+		glVertex3f(vec.at(j).xcord, vec.at(j).ycord, vec.at(j).zcord);
+
+
+
+
+		float len0 = sqrt((pow(p0.xcord, 2)) + (pow(p0.ycord, 2)) + (pow(p0.zcord, 2))); //magnitude of V1
+		float len1 = sqrt((pow(tanx, 2)) + (pow(tany, 2)) + (pow(tanz, 2))); //magnitude of V2
+
+		p0.xcord = p0.xcord / len0; //normalize V1 and V2
+		p0.ycord = p0.ycord / len0;
+		p0.zcord = p0.zcord / len0;
+
+		tanx = tanx / len1;
+		tany = tany / len1;
+		tanz = tanz / len1;
+
+
+
+		float dot = (p0.xcord * tanx) + (p0.ycord * tany) + (p0.zcord * tanz); //dot product of Normalized vectors
+
+		float angle = acos(dot / (1 * 1)); //angle between two Normalized vectors IE len of both = 1
+
+		for (float i = 0; i < 1.0; i += 0.05) {
+			float alpha = sin((1 - i) * angle) / sin(angle); //calculate alpha for current t
+			float beta = sin(i * angle) / sin(angle); //calculate beta for current t
+			float xcord = alpha * p0.xcord + beta * tanx;
+			float ycord = alpha * p0.ycord + beta * tany;
+			float zcord = alpha * p0.zcord + beta * tanz;
+			glVertex3f(xcord, ycord, zcord);
+		}
+
+
+		
+		glVertex3f(vec.at(j).tangentxcord, vec.at(j).tangentycord, vec.at(j).tangentzcord);
+		
+
+
+		//need to SLERP the two points. 
+
+		//glVertex3f(0,0,0);
+
+		glEnd();
+		glFlush();
+
+
+	}
+
+
+
 	if (vec.size() > 1){
 		if (extendRight) {
 			if (tExtend < 1.0) {
@@ -473,14 +558,12 @@ void display() {
 			}
 		}
 		if (extendLeft) {
-			printf("extend Left\n");
 			for (float i = tExtend; i <= 1.0; i += 0.01) { // t =[textend,1]
 				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
 				slerp(vec);
 			}
 		}
 		else if (extendRight) {
-			printf("extend Right\n");
 
 			for (float i = 0.0; i <= tExtend; i += 0.01) { // t =[0,textend]
 				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
@@ -488,7 +571,6 @@ void display() {
 			}
 		}
 		else {
-			printf("extend None\n");
 
 			for (float i = 0.0; i <= 1.0; i += 0.01) { // t = [0,1] no extension
 				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
@@ -541,6 +623,7 @@ void mouseClick(int button, int mode, int x, int y) {
 
 	if (button == 2 && mode == 0) { //rmb down
 		addPoint = true;
+		addtangent = !addtangent;
 
 		xpoint = 2.0f * ((GLfloat)x + 0.5f) / (GLfloat)(glutGet(GLUT_WINDOW_WIDTH)) - 1.0f;
 		 ypoint = -1 * (2.0f * ((GLfloat)y + 0.5f) / (GLfloat)(glutGet(GLUT_WINDOW_HEIGHT)) - 1.0f);
@@ -608,7 +691,6 @@ void mouseMotion(int x, int y) {
 
 	if (z == 1 && lmbd) { //shift being held with left mouse
 		//start shifting the selected point;
-		printf("inside shift movement\n");
 		int index = -1;
 		for (int i = 0; i < vec.size(); i++) {
 			if (vec.at(i).gcolor == 1.0) { //selected point
