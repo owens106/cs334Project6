@@ -88,6 +88,7 @@ BOOLEAN extendRight= false;
 
 float timevar= 0.26f;
 float tVar = 0.26;
+float hermitTime = 0.56;
 float sval = 0.5;
 float tExtend = 0.0;
 
@@ -96,6 +97,7 @@ int segments;
 
 vector<Point> vec;
 vector<Point> tempSlerp;
+vector<float>hermitPoints;
 
 
 void drawCubeLocation(GLfloat xcenter, GLfloat ycenter, GLfloat size, GLfloat zpos, float rcolor, float gcolor, float bcolor) {
@@ -218,7 +220,7 @@ void slerp(vector<Point> vec) {
 
 		glColor3f(0.0, 0.5, 0.0); //set to green for lines
 
-		if (DeCastelijauCheckboxBool && (abs(t-tVar)<0.01)) { //only draw if check box is marked AND current iteration matches the current spinner t value
+		if (DeCastelijauCheckboxBool && (abs(t-tVar)<0.005)) { //only draw if check box is marked AND current iteration matches the current spinner t value
 			glBegin(GL_LINE_STRIP);
 		}
 		float counter = 0.0;
@@ -237,7 +239,7 @@ void slerp(vector<Point> vec) {
 		}
 
 
-		for (counter; counter <= stop; counter += 0.05f) {
+		for (counter; counter <= stop+0.05; counter += 0.05f) {
 			//this represents T steps
 			float alpha = sin((1 - counter) * angle) / sin(angle); //calculate alpha for current t
 			float beta = sin(counter * angle) / sin(angle); //calculate beta for current t
@@ -251,7 +253,7 @@ void slerp(vector<Point> vec) {
 			 zcord = xcord * m[8] + ycord * m[9] + zcord * m[10];
 			 */
 
-			if (DeCastelijauCheckboxBool && (abs(t - tVar) < 0.01)) {
+			if (DeCastelijauCheckboxBool && (abs(t - tVar) < 0.005)) {
 				glVertex3f(xcord, ycord, zcord);
 
 			}
@@ -380,6 +382,61 @@ void reshape(int x, int y)
 	glViewport(0, 0, x, y);  //Use the whole window for rendering
 }
 
+void hermit(vector<Point>vec,int i) {
+	if (vec.at(i).tangentxcord == -1 || vec.at(i+1).tangentxcord == -1) {
+		//tangents are not defined
+		return;
+	}
+	for (float time = 0; time < 1.0;time +=0.05) {
+		hermitTime = time;
+		float p0x = vec.at(i).xcord;
+		float p0y = vec.at(i).ycord;
+		float p0z = vec.at(i).zcord;
+
+
+		float p0tanx = vec.at(i).tangentxcord;
+		float p0tany = vec.at(i).tangentycord;
+		float p0tanz = vec.at(i).tangentzcord;
+
+
+		float p1x = vec.at(i+1).xcord;
+		float p1y = vec.at(i+1).ycord;
+		float p1z = vec.at(i+1).zcord;
+
+
+		float p1tanx = vec.at(1).tangentxcord;
+		float p1tany = vec.at(1).tangentycord;
+		float p1tanz = vec.at(1).tangentzcord;
+
+		//curve equation 
+		//y(t) = (2t^3 -3t^2 +1)P0 + (-2t^3 +3t^2)P1 + (t^3 -2t^2 +t)p0Tangent + (t^3-t^2) P1Tangent
+
+		float alpha = (2 * pow(hermitTime, 3)) - (3 * pow(hermitTime, 2)) + 1;
+		float beta = (-2 * pow(hermitTime, 3) + 3 * pow(hermitTime, 2));
+		float charlie = (pow(hermitTime, 3) - 2 * pow(hermitTime, 2) + hermitTime);
+		float delta = pow(hermitTime, 3) - pow(hermitTime, 2);
+
+		float xcord = (alpha * p0x) + (beta * p1x) + (charlie * p0tanx) + (delta * p1tanx);
+		float ycord = (alpha * p0y) + (beta * p1y) + (charlie * p0tany) + (delta * p1tany);
+		float zcord = (alpha * p0z) + (beta * p1z) + (charlie * p0tanz) + (delta * p1tanz);
+
+
+		float tempxcord = xcord;
+		float tempycord = ycord;
+		float tempzcord = zcord;
+
+		//xcord = (tempxcord * m[0] + tempycord * m[1] + tempzcord * m[2]); //fix points to align with rotation
+		//ycord = tempxcord * m[4] + tempycord * m[5] + tempzcord * m[6];
+
+		//zcord = tempxcord * m[8] + tempycord * m[9] + tempzcord * m[10];
+
+		hermitPoints.push_back(xcord);
+		hermitPoints.push_back(ycord);
+		hermitPoints.push_back(zcord);
+
+	}
+}
+
 
 // display function
 void display() {
@@ -498,8 +555,6 @@ void display() {
 		glVertex3f(vec.at(j).xcord, vec.at(j).ycord, vec.at(j).zcord);
 
 
-
-
 		float len0 = sqrt((pow(p0.xcord, 2)) + (pow(p0.ycord, 2)) + (pow(p0.zcord, 2))); //magnitude of V1
 		float len1 = sqrt((pow(tanx, 2)) + (pow(tany, 2)) + (pow(tanz, 2))); //magnitude of V2
 
@@ -529,21 +584,27 @@ void display() {
 
 		
 		glVertex3f(vec.at(j).tangentxcord, vec.at(j).tangentycord, vec.at(j).tangentzcord);
-		
-
-
-		//need to SLERP the two points. 
-
-		//glVertex3f(0,0,0);
 
 		glEnd();
 		glFlush();
 
 
 	}
+	if (vec.size() > 1) {
 
+		for (int i = 0; i < vec.size() - 1; i++) {
+			hermit(vec,i);
+		}
+		if (hermitPoints.size() > 0) {
+			glBegin(GL_LINE_STRIP);
 
-
+			for (int index = 0; index < hermitPoints.size(); index += 3) {
+				glVertex3f(hermitPoints.at(index), hermitPoints.at(index + 1), hermitPoints.at(index+2));
+			}
+			glEnd();
+			hermitPoints.clear();
+		}
+	}
 	if (vec.size() > 1){
 		if (extendRight) {
 			if (tExtend < 1.0) {
