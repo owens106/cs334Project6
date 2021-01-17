@@ -44,6 +44,9 @@ int ctrlPointsToggleCheckboxBool;
 GLUI_Checkbox* ticksCheckbox;
 int ticksCheckboxBool;
 
+GLUI_Checkbox* multBezierCheckbox;
+int multBezierCheckboxBool;
+
 GLUI_Spinner* s_spinner;
 GLUI_Spinner* t_extend;
 
@@ -155,7 +158,7 @@ void drawCubeLocation(GLfloat xcenter, GLfloat ycenter, GLfloat size, GLfloat zp
 	glVertex3f(xcenter + size, ycenter - size, zpos + size); //bottom right
 	glEnd();
 
-	glFlush();
+	//glFlush();
 }
 
 void select(int index) {
@@ -259,7 +262,7 @@ void slerp(vector<Point> vec) {
 			}
 			if (CurveCheckboxBool) {
 				//draw curve
-				if (vec.size() == 2 && ::vec.size() > 2) {
+				if (vec.size() == 2) {
 					if (abs(counter - timevar) <= 0.05) {
 						//point to "save"
 
@@ -492,7 +495,7 @@ void display() {
 			//solid sphere no grid
 		}
 	}
-	glFlush();
+	//glFlush();
 	//use combo of solid + slightly bigger wire sphere to map "grid" to sphere
 
 	// Flush buffers to screen
@@ -505,9 +508,11 @@ void display() {
 
 		float zvalFinal = xpoint * m[8] + ypoint * m[9] + zval * m[10];
 		if (addtangent) {
-			vec.back().tangentxcord = xval;
-			vec.back().tangentycord = yval;
-			vec.back().tangentzcord = zvalFinal;
+			if (vec.size() != 0) {
+				vec.back().tangentxcord = xval;
+				vec.back().tangentycord = yval;
+				vec.back().tangentzcord = zvalFinal;
+			}
 		}
 
 		else {
@@ -586,7 +591,7 @@ void display() {
 		glVertex3f(vec.at(j).tangentxcord, vec.at(j).tangentycord, vec.at(j).tangentzcord);
 
 		glEnd();
-		glFlush();
+		//glFlush();
 
 
 	}
@@ -605,43 +610,63 @@ void display() {
 			hermitPoints.clear();
 		}
 	}
-	if (vec.size() > 1){
-		if (extendRight) {
-			if (tExtend < 1.0) {
-				//no longer valid to extend right
-				extendRight = false;
+	if (vec.size() > 3){
+		for (int vecIndex = 1; vecIndex < vec.size()-2; vecIndex++) {
+			//feed slerp 4 points at a time
+			vector<Point>cubicSlerp;
+			
+			if (multBezierCheckboxBool) {
+				cubicSlerp.push_back(vec.at(vec.size() - vecIndex)); //get last point in vec which was first drawn
+				cubicSlerp.push_back(vec.at(vec.size() - vecIndex - 1));
+				cubicSlerp.push_back(vec.at(vec.size() - vecIndex - 2));
+				cubicSlerp.push_back(vec.at(vec.size() - vecIndex - 3));
 			}
-		}
+			else {
+				cubicSlerp = vec;
+			}
+			if (extendRight) {
+				if (tExtend < 1.0) {
+					//no longer valid to extend right
+					extendRight = false;
+				}
+			}
 
-		if (extendLeft) {
-			if (tExtend > 0.0) {
-				extendLeft = false;
+			if (extendLeft) {
+				if (tExtend > 0.0) {
+					extendLeft = false;
+				}
 			}
-		}
-		if (extendLeft) {
-			for (float i = tExtend; i <= 1.0; i += 0.01) { // t =[textend,1]
-				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
-				slerp(vec);
+			if (extendLeft) {
+				for (float i = tExtend; i <= 1.0; i += 0.01) { // t =[textend,1]
+					timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
+					//slerp(vec);
+					slerp(cubicSlerp);
+				}
 			}
-		}
-		else if (extendRight) {
+			else if (extendRight) {
 
-			for (float i = 0.0; i <= tExtend; i += 0.01) { // t =[0,textend]
-				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
-				slerp(vec);
-			}
-		}
-		else {
+				for (float i = 0.0; i <= tExtend; i += 0.01) { // t =[0,textend]
+					timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
+					//slerp(vec);
+					slerp(cubicSlerp);
 
-			for (float i = 0.0; i <= 1.0; i += 0.01) { // t = [0,1] no extension
-				timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
-				slerp(vec);
+				}
 			}
-		}
+			else {
+
+				for (float i = 0.0; i <= 1.0; i += 0.01) { // t = [0,1] no extension
+					timevar = i; //TOGGLE FOR INTERMEDIATE INTERPOLATIONS
+					//slerp(vec);
+					slerp(cubicSlerp);
+
+				}
+			}
+			cubicSlerp.clear();
+		}//end for
 	}//end vec size if
 	
 
-	glFlush();
+	//glFlush();
 	// sawp buffers called because we are using double buffering 
    // glutSwapBuffers();
 
@@ -893,8 +918,10 @@ int main(int argc, char** argv)
 	wirespherePolyCheckbox = glui->add_checkbox("Wire Sphere", &wirespherePolyCheckboxBool);
 	ctrlPointsToggleCheckbox = glui->add_checkbox("show no Control Points", &ctrlPointsToggleCheckboxBool);
 	ticksCheckbox = glui->add_checkbox("show Ticks", &ticksCheckboxBool);
+	multBezierCheckbox = glui->add_checkbox("Multiple Bezier", &multBezierCheckboxBool);
 
 	glui->add_separator();
+	glui->add_column();
 	GLUI_Panel* functionPanel = glui->add_panel("Function Panel");
 	segment_spinner = glui->add_spinner("T Val",GLUI_SPINNER_FLOAT, &tVar);
 	segment_spinner->set_float_limits(0.0, 1.0);
